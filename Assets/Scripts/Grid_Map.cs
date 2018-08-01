@@ -27,6 +27,28 @@ public class Grid_Map : MonoBehaviour {
     int customersRemaining = 10;
     bool paused;
 
+    //STRUCTURE TO HOLD GRID COORDINATES DURING CHECKMATCH
+    struct coord
+    {
+        public coord( int x, int y )
+        {
+            this.x = x;
+            this.y = y;
+        }
+        int x;
+        int y;
+
+        public int getX()
+        {
+            return x;
+        }
+
+        public int getY()
+        {
+            return y;
+        }
+    }
+
     public GameObject donutPrefab, donutPrefab2, donutPrefab3, donut4, donut5, donut6, donut7, donut8, donut9, donut10, donut11, donut12, donut13, donut14, donut15, donut16,
         donut17, donut18, donut19, donut20, donut21, donut22, donut23, donut24, donut25;
     
@@ -278,14 +300,24 @@ public class Grid_Map : MonoBehaviour {
     IEnumerator shiftDownDelay( int x, int y, float delay )
     {
         if (grid[x, y] == null)
+        {
             grid[x, y] = new GameObject();
+            yield break;
+        }
         if( grid[x, y].GetComponent<donut>() != null )
         {
-            grid[x, y].GetComponent<donut>().drop();
-            float delayAdjust = 0.01f;
-            //WAIT UNTIL MATCHED DONUTS ARE RESOLVED
             while (globals.isPaused)
             { yield return new WaitForSecondsRealtime(0.01f); }
+
+            if (grid[x, y].GetComponent<donut>() != null)
+            {
+                if (grid[x, y].GetComponent<donut>().isMatched())
+                    yield break;
+                grid[x, y].GetComponent<donut>().drop();
+            }
+            float delayAdjust = 0.01f;
+            //WAIT UNTIL MATCHED DONUTS ARE RESOLVED
+            
             while (y > 0 && grid[x,y] != null && grid[x, y - 1].GetComponent<donut>() == null)
             {
                 while (globals.isPaused)
@@ -298,7 +330,7 @@ public class Grid_Map : MonoBehaviour {
                 grid[x, y - 1] = grid[x, y];
                 grid[x, y - 1].transform.Translate(0f, -1f, 0f);
                 grid[x, y] = gridTmp;
-                grid[x, y].transform.Translate(0f, 1f, 0f);
+                //grid[x, y].transform.Translate(0f, 1f, 0f);
                     
                 if (y < height - 1)
                     shiftDown(x, y + 1);
@@ -363,8 +395,114 @@ public class Grid_Map : MonoBehaviour {
         grid[x, y] = new GameObject();
     }
 
+    void checkNextMatchLeftColor(int x, int y, List<coord> list)
+    {
+        if( x > 0 && grid[x - 1, y].GetComponent<donut>() != null && grid[x - 1, y].GetComponent<donut>().matchColor(grid[x,y].GetComponent<donut>()) )
+        {
+            list.Add(new coord(x - 1, y));
+            checkNextMatchLeftColor(x - 1, y, list);
+        }
+    }
+
+    void checkNextMatchRightColor(int x, int y, List<coord> list)
+    {
+        if (x < width - 1 && grid[x + 1, y].GetComponent<donut>() != null && grid[x + 1, y].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()))
+        {
+            list.Add(new coord(x + 1, y));
+            checkNextMatchRightColor(x + 1, y, list);
+        }
+    }
+
+    void checkNextMatchUpColor(int x, int y, List<coord> list)
+    {
+        if (y < height - 1 && grid[x, y + 1].GetComponent<donut>() != null && grid[x, y + 1].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()))
+        {
+            list.Add(new coord(x, y + 1));
+            checkNextMatchUpColor(x, y + 1, list);
+        }
+    }
+
+    void checkNextMatchDownColor(int x, int y, List<coord> list)
+    {
+        if (y > 0 && grid[x, y - 1].GetComponent<donut>() != null && grid[x, y - 1].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()))
+        {
+            list.Add(new coord(x, y - 1));
+            checkNextMatchDownColor(x, y - 1, list);
+        }
+    }
+
+    void checkNextMatchLeftShape(int x, int y, List<coord> list)
+    {
+        if (x > 0 && grid[x - 1, y].GetComponent<donut>() != null && grid[x - 1, y].GetComponent<donut>().matchShape(grid[x, y].GetComponent<donut>()))
+        {
+            list.Add(new coord(x - 1, y));
+            checkNextMatchLeftShape(x - 1, y, list);
+        }
+    }
+
+    void checkNextMatchRightShape(int x, int y, List<coord> list)
+    {
+        if (x < width - 1 && grid[x + 1, y].GetComponent<donut>() != null && grid[x + 1, y].GetComponent<donut>().matchShape(grid[x, y].GetComponent<donut>()))
+        {
+            list.Add(new coord(x + 1, y));
+            checkNextMatchRightShape(x + 1, y, list);
+        }
+    }
+
+    void checkNextMatchUpShape(int x, int y, List<coord> list)
+    {
+        if (y < height - 1 && grid[x, y + 1].GetComponent<donut>() != null && grid[x, y + 1].GetComponent<donut>().matchShape(grid[x, y].GetComponent<donut>()))
+        {
+            list.Add(new coord(x, y + 1));
+            checkNextMatchUpShape(x, y + 1, list);
+        }
+    }
+
+    void checkNextMatchDownShape(int x, int y, List<coord> list)
+    {
+        if (y > 0 && grid[x, y - 1].GetComponent<donut>() != null && grid[x, y - 1].GetComponent<donut>().matchShape(grid[x, y].GetComponent<donut>()))
+        {
+            list.Add(new coord(x, y - 1));
+            checkNextMatchDownShape(x, y - 1, list);
+        }
+    }
+
+    void resolveList( List<coord> list)
+    {
+        //SET FLAG TO CHECK DESIRED DONUT
+        bool desireHit = false;
+        for( int i = 0; i < list.Count; i++ )
+        {
+            donut d = grid[list[i].getX(), list[i].getY()].GetComponent<donut>();
+            d.setMatch();
+            StartCoroutine(fillEmptySpace(list[i].getX(), list[i].getY(), fillDelay));
+            StartCoroutine(shiftDownDelay(list[i].getX(), list[i].getY() + 1, shiftDelay));
+            if ( d.exactMatch(desired.GetComponent<donut>()) )
+            {
+                score += 200;
+                desireHit = true;
+            }
+            else if( d.anyMatch(desired.GetComponent<donut>()) )
+            {
+                score += 100;
+                desireHit = true;
+            }
+        }
+        sfxSrc.PlayOneShot(matchSound);
+        scoreText.text = score.ToString();
+        if (desireHit)
+        {
+            Destroy(desired.gameObject);
+            desired = (GameObject)Instantiate(donutList[Random.Range(0, donutList.Count)].gameObject, new Vector2(8f, 5f), Quaternion.identity);
+            customersRemaining--;
+            customers.text = customersRemaining.ToString();
+        }
+    }
+
     void checkMatch( int x, int y )
     {
+        List<coord> tmpList = new List<coord>();
+
         if( grid[x,y] == null )
         {
             grid[x, y] = new GameObject();
@@ -380,13 +518,21 @@ public class Grid_Map : MonoBehaviour {
             if (grid[x - 1, y].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()) && grid[x - 2, y].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()))
             {
                 Debug.Log("Matched three!");
-                grid[x - 2, y].GetComponent<donut>().setMatch();
-                grid[x - 1, y].GetComponent<donut>().setMatch();
-                grid[x, y].GetComponent<donut>().setMatch();
+                //ADD MATCHING OBJECTS TO BE ADDED TO LIST TO BE RESOLVED LATER
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x - 1, y));
+                tmpList.Add(new coord(x - 2, y));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchLeftColor(x - 2, y, tmpList);
+                checkNextMatchRightColor(x, y, tmpList);
+                resolveList(tmpList);
+                //grid[x - 2, y].GetComponent<donut>().setMatch();
+                //grid[x - 1, y].GetComponent<donut>().setMatch();
+                //grid[x, y].GetComponent<donut>().setMatch();
 
-                sfxSrc.PlayOneShot(matchSound);
+                
 
-                score += 300;
+                /*score += 300;
                 if (grid[x, y].GetComponent<donut>().exactMatch(desired.GetComponent<donut>()) || grid[x - 1, y].GetComponent<donut>().exactMatch(desired.GetComponent<donut>()) || grid[x - 2, y].GetComponent<donut>().exactMatch(desired.GetComponent<donut>()))
                 {
                     score += 200;
@@ -410,18 +556,26 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(fillEmptySpace(x, y, fillDelay));
                 StartCoroutine(shiftDownDelay(x - 2, y + 1, shiftDelay));
                 StartCoroutine(shiftDownDelay(x - 1, y + 1, shiftDelay));
-                StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));
+                StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));*/
                 return;
             }
             //IF THE LAST DONUT DOESN'T MATCH THE SAME ATTRIBUTE, CHECK AGAINST THE SECONDARY ATTRIBUTE
             else if (grid[x, y].GetComponent<donut>().matchShape(grid[x - 1, y].GetComponent<donut>()) && grid[x, y].GetComponent<donut>().matchShape(grid[x - 2, y].GetComponent<donut>()) )
             {
                 Debug.Log("Matched three!");
-                grid[x - 2, y].GetComponent<donut>().setMatch();
-                grid[x - 1, y].GetComponent<donut>().setMatch();
-                grid[x, y].GetComponent<donut>().setMatch();
+                //grid[x - 2, y].GetComponent<donut>().setMatch();
+                //grid[x - 1, y].GetComponent<donut>().setMatch();
+                //grid[x, y].GetComponent<donut>().setMatch();
 
-                score += 300;
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x - 1, y));
+                tmpList.Add(new coord(x - 2, y));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchLeftShape(x - 2, y, tmpList);
+                checkNextMatchRightShape(x, y, tmpList);
+                resolveList(tmpList);
+
+                /*score += 300;
 
                 sfxSrc.PlayOneShot(matchSound);
 
@@ -448,7 +602,7 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(fillEmptySpace(x, y, fillDelay));
                 StartCoroutine(shiftDownDelay(x - 2, y + 1, shiftDelay));
                 StartCoroutine(shiftDownDelay(x - 1, y + 1, shiftDelay));
-                StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));
+                StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));*/
                 return;
             }
         }
@@ -459,7 +613,15 @@ public class Grid_Map : MonoBehaviour {
             Debug.Log("Right match!");
             if (grid[x + 1, y].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()) && grid[x + 2, y].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()))
             {
-                Debug.Log("Matched three!");
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x + 1, y));
+                tmpList.Add(new coord(x + 2, y));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchLeftColor(x, y, tmpList);
+                checkNextMatchRightColor(x + 2, y, tmpList);
+                resolveList(tmpList);
+
+                /*Debug.Log("Matched three!");
                 grid[x + 2, y].GetComponent<donut>().setMatch();
                 grid[x + 1, y].GetComponent<donut>().setMatch();
                 grid[x, y].GetComponent<donut>().setMatch();
@@ -490,12 +652,21 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(fillEmptySpace(x, y, fillDelay));
                 StartCoroutine(shiftDownDelay(x + 2, y + 1, shiftDelay));
                 StartCoroutine(shiftDownDelay(x + 1, y + 1, shiftDelay));
-                StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));
+                StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));*/
                 return;
             }
             else if (grid[x, y].GetComponent<donut>().matchShape(grid[x + 1, y].GetComponent<donut>()) && grid[x, y].GetComponent<donut>().matchShape(grid[x + 2, y].GetComponent<donut>()))
             {
-                Debug.Log("Matched three!");
+
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x + 1, y));
+                tmpList.Add(new coord(x + 2, y));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchLeftShape(x, y, tmpList);
+                checkNextMatchRightShape(x + 2, y, tmpList);
+                resolveList(tmpList);
+
+                /*Debug.Log("Matched three!");
                 grid[x + 2, y].GetComponent<donut>().setMatch();
                 grid[x + 1, y].GetComponent<donut>().setMatch();
                 grid[x, y].GetComponent<donut>().setMatch();
@@ -526,7 +697,7 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(fillEmptySpace(x, y, fillDelay));
                 StartCoroutine(shiftDownDelay(x + 2, y + 1, shiftDelay));
                 StartCoroutine(shiftDownDelay(x + 1, y + 1, shiftDelay));
-                StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));
+                StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));*/
                 return;
             }
         }
@@ -537,7 +708,16 @@ public class Grid_Map : MonoBehaviour {
             Debug.Log("Right match!");
             if (grid[x - 1, y].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()) && grid[x + 1, y].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()))
             {
-                Debug.Log("Matched three!");
+
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x + 1, y));
+                tmpList.Add(new coord(x - 1, y));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchLeftColor(x - 1, y, tmpList);
+                checkNextMatchRightColor(x + 1, y, tmpList);
+                resolveList(tmpList);
+
+                /*Debug.Log("Matched three!");
                 grid[x + 1, y].GetComponent<donut>().setMatch();
                 grid[x - 1, y].GetComponent<donut>().setMatch();
                 grid[x, y].GetComponent<donut>().setMatch();
@@ -569,11 +749,21 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(shiftDownDelay(x + 1, y + 1, shiftDelay));
                 StartCoroutine(shiftDownDelay(x - 1, y + 1, shiftDelay));
                 StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));
+                */
                 return;
             }
             else if (grid[x, y].GetComponent<donut>().matchShape(grid[x + 1, y].GetComponent<donut>()) && grid[x, y].GetComponent<donut>().matchShape(grid[x - 1, y].GetComponent<donut>()))
             {
-                Debug.Log("Matched three!");
+
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x + 1, y));
+                tmpList.Add(new coord(x - 1, y));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchLeftShape(x - 1, y, tmpList);
+                checkNextMatchRightShape(x + 1, y, tmpList);
+                resolveList(tmpList);
+
+                /*Debug.Log("Matched three!");
                 grid[x + 1, y].GetComponent<donut>().setMatch();
                 grid[x - 1, y].GetComponent<donut>().setMatch();
                 grid[x, y].GetComponent<donut>().setMatch();
@@ -605,6 +795,7 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(shiftDownDelay(x + 1, y + 1, shiftDelay));
                 StartCoroutine(shiftDownDelay(x - 1, y + 1, shiftDelay));
                 StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));
+                */
                 return;
             }
         }
@@ -614,7 +805,16 @@ public class Grid_Map : MonoBehaviour {
             Debug.Log("Top match!");
             if (grid[x, y + 1].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()) && grid[x, y + 2].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()))
             {
-                Debug.Log("Matched three!");
+
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x, y + 1));
+                tmpList.Add(new coord(x, y + 2));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchUpColor(x, y + 2, tmpList);
+                checkNextMatchDownColor(x, y, tmpList);
+                resolveList(tmpList);
+
+                /*Debug.Log("Matched three!");
                 grid[x, y].GetComponent<donut>().setMatch();
                 grid[x, y + 1].GetComponent<donut>().setMatch();
                 grid[x, y + 2].GetComponent<donut>().setMatch();
@@ -648,11 +848,21 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(shiftDownDelay(x, y + 3, shiftDelay));
                 //StartCoroutine(shiftDownDelay(x + 2, y + 1, 0.7f));
                 //StartCoroutine(shiftDownDelay(x + 1, y + 1, 0.7f));
+                */
                 return;
             }
             else if (grid[x, y + 1].GetComponent<donut>().matchShape(grid[x, y].GetComponent<donut>()) && grid[x, y + 2].GetComponent<donut>().matchShape(grid[x, y].GetComponent<donut>()))
             {
-                Debug.Log("Matched three!");
+
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x, y + 1));
+                tmpList.Add(new coord(x, y + 2));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchUpShape(x, y + 2, tmpList);
+                checkNextMatchDownShape(x, y, tmpList);
+                resolveList(tmpList);
+
+                /*Debug.Log("Matched three!");
                 grid[x, y].GetComponent<donut>().setMatch();
                 grid[x, y + 1].GetComponent<donut>().setMatch();
                 grid[x, y + 2].GetComponent<donut>().setMatch();
@@ -684,6 +894,7 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(shiftDownDelay(x, y + 3, shiftDelay));
                 //StartCoroutine(shiftDownDelay(x + 2, y + 1, 0.7f));
                 //StartCoroutine(shiftDownDelay(x + 1, y + 1, 0.7f));
+                */
                 return;
             }
         }
@@ -694,7 +905,16 @@ public class Grid_Map : MonoBehaviour {
             Debug.Log("Top match!");
             if (grid[x, y + 1].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()) && grid[x, y - 1].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()))
             {
-                Debug.Log("Matched three middle!");
+
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x, y + 1));
+                tmpList.Add(new coord(x, y - 1));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchUpColor(x, y + 1, tmpList);
+                checkNextMatchDownColor(x, y - 1, tmpList);
+                resolveList(tmpList);
+
+                /*Debug.Log("Matched three middle!");
                 grid[x, y].GetComponent<donut>().setMatch();
                 grid[x, y + 1].GetComponent<donut>().setMatch();
                 grid[x, y - 1].GetComponent<donut>().setMatch();
@@ -726,11 +946,21 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(shiftDownDelay(x, y + 2, shiftDelay));
                 //StartCoroutine(shiftDownDelay(x + 2, y + 1, 0.7f));
                 //StartCoroutine(shiftDownDelay(x + 1, y + 1, 0.7f));
+                */
                 return;
             }
             else if (grid[x,y + 1].GetComponent<donut>().matchShape(grid[x, y].GetComponent<donut>()) && grid[x, y - 1].GetComponent<donut>().matchShape(grid[x, y].GetComponent<donut>()))
             {
-                Debug.Log("Matched three middle!");
+
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x, y + 1));
+                tmpList.Add(new coord(x, y - 1));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchUpShape(x, y + 1, tmpList);
+                checkNextMatchDownShape(x, y - 1, tmpList);
+                resolveList(tmpList);
+
+                /*Debug.Log("Matched three middle!");
                 grid[x, y].GetComponent<donut>().setMatch();
                 grid[x, y + 1].GetComponent<donut>().setMatch();
                 grid[x, y - 1].GetComponent<donut>().setMatch();
@@ -762,6 +992,7 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(shiftDownDelay(x, y + 2, shiftDelay));
                 //StartCoroutine(shiftDownDelay(x + 2, y + 1, 0.7f));
                 //StartCoroutine(shiftDownDelay(x + 1, y + 1, 0.7f));
+                */
                 return;
             }
         }
@@ -772,7 +1003,16 @@ public class Grid_Map : MonoBehaviour {
             Debug.Log("Bottom match!");
             if (grid[x, y - 1].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()) && grid[x, y - 2].GetComponent<donut>().matchColor(grid[x, y].GetComponent<donut>()))
             {
-                Debug.Log("Matched three!");
+
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x, y - 1));
+                tmpList.Add(new coord(x, y - 2));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchUpColor(x, y, tmpList);
+                checkNextMatchDownColor(x, y - 2, tmpList);
+                resolveList(tmpList);
+
+                /*Debug.Log("Matched three!");
                 grid[x, y].GetComponent<donut>().setMatch();
                 grid[x, y - 1].GetComponent<donut>().setMatch();
                 grid[x, y - 2].GetComponent<donut>().setMatch();
@@ -804,11 +1044,21 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));
                 //StartCoroutine(shiftDownDelay(x + 2, y + 1, 0.7f));
                 //StartCoroutine(shiftDownDelay(x + 1, y + 1, 0.7f));
+                */
                 return;
             }
             else if (grid[x, y - 1].GetComponent<donut>().matchShape(grid[x, y].GetComponent<donut>()) && grid[x, y - 2].GetComponent<donut>().matchShape(grid[x, y].GetComponent<donut>()))
             {
-                Debug.Log("Matched three!");
+
+                tmpList.Add(new coord(x, y));
+                tmpList.Add(new coord(x, y - 1));
+                tmpList.Add(new coord(x, y - 2));
+                //CHECK FOR FURTHER MATCHES TO LEFT & RIGHT
+                checkNextMatchUpShape(x, y, tmpList);
+                checkNextMatchDownShape(x, y - 2, tmpList);
+                resolveList(tmpList);
+
+                /*Debug.Log("Matched three!");
                 grid[x, y].GetComponent<donut>().setMatch();
                 grid[x, y - 1].GetComponent<donut>().setMatch();
                 grid[x, y - 2].GetComponent<donut>().setMatch();
@@ -840,6 +1090,7 @@ public class Grid_Map : MonoBehaviour {
                 StartCoroutine(shiftDownDelay(x, y + 1, shiftDelay));
                 //StartCoroutine(shiftDownDelay(x + 2, y + 1, 0.7f));
                 //StartCoroutine(shiftDownDelay(x + 1, y + 1, 0.7f));  
+                */
                 return;
             }
         }
